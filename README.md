@@ -35,7 +35,7 @@ CUDA_VISIBLE_DEVICES=0 ./run_ner_cmedqa.sh
 Note we force to only use single GPU for now.
 
 
-## Cite
+## Citation
 ```
 @inproceedings{zhang-etal-2021-smedbert,
     title = "{SM}ed{BERT}: A Knowledge-Enhanced Pre-trained Language Model with Structured Semantics for Medical Text Mining",
