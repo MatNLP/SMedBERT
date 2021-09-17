@@ -28,7 +28,7 @@ CUDA_VISIBLE_DEVICES=0 ./run_ner_cmedqa.sh
 Note we force to only use single GPU for now.
 
 ## Data Problems
-Our code is almost ready for you, while we have to get permission from [DXY](https://portal.dxy.cn/) whether the private owned datasets and KGs are allowed to be public or not. For now, we only release our code for you to train SMedBERT model with your Chinese medical data. If they agree to release the data, we will only release 5% of the entities in KG and its embedding trained by KGE algorithm for you to play around. Feel free to open issue if you have any question. 
+Our code is almost ready for you, while we have to get permission from [DXY](https://portal.dxy.cn/) whether the private owned datasets and KGs are allowed to be public or not. For now, we only release our code for you to train SMedBERT model with your Chinese medical data. If they agree to release the data, we will release 5% of the entities in KG and its embedding trained by KGE algorithm for you to play around. Feel free to open issue if you have any question. 
 
 ## Cite
 ```
