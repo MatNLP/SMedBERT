@@ -16,7 +16,7 @@ Source code and data for [SMedBERT: A Knowledge-Enhanced Pre-trained Language Mo
 - [IR](https://github.com/alibaba-research/ChineseBLUE)
 - ...
 
-We have include datasets with "open" licenses in the hub and for other datasets you may have to acquire them by your own.
+We release datasets with "open" licenses in the hub and for other datasets you may have to acquire them by your own.
 
 ## Usage
 - Download the Pre-trained Model (BaiduPan link: https://pan.baidu.com/s/1T0L6uv3JzY6dT3mcX_mghQ passwd: ea6f), and put it into the main folder.  
