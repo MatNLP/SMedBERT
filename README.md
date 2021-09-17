@@ -3,7 +3,7 @@ Source code and data for [SMedBERT: A Knowledge-Enhanced Pre-trained Language Mo
 
 
 ## Hi everyone!
-Our code is almost ready for you, while we have to get permission from DXY [DXY](https://portal.dxy.cn/) whether the private owned datasets and KGs are allowed to be public or not. For now, we only release our code for you to train SMedBERT model with your Chinese medical data. If they agree to release the data, we will only release 5% of the entities in KG for you to play around. Feel free to open issue if you have any question. 
+Our code is almost ready for you, while we have to get permission from [DXY](https://portal.dxy.cn/) whether the private owned datasets and KGs are allowed to be public or not. For now, we only release our code for you to train SMedBERT model with your Chinese medical data. If they agree to release the data, we will only release 5% of the entities in KG for you to play around. Feel free to open issue if you have any question. 
 
 ## Datasets:
 - [CMedQANER](https://github.com/alibaba-research/ChineseBLUE)
