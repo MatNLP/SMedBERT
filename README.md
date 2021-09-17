@@ -14,8 +14,8 @@ Our code is almost ready for your, while we have to checkout with DXY if the cur
 We have include datasets with "open" licenses in the hub and for other datasets you may have to acquire them by your own.
 
 ## Usage
-Download the Pre-trained Model (BaiduPan 链接: https://pan.baidu.com/s/1T0L6uv3JzY6dT3mcX_mghQ 提取码: ea6f), and put it into the main folder.  
-Download the KG embedding: (BaiduPan 链接：https://pan.baidu.com/s/19V-M70TdndPCR50r5Z2OYQ  提取码：0000), and put it into the /kgs folder.  
+Download the Pre-trained Model (BaiduPan link: https://pan.baidu.com/s/1T0L6uv3JzY6dT3mcX_mghQ passwd: ea6f), and put it into the main folder.  
+Download the KG embedding: (BaiduPan link：https://pan.baidu.com/s/19V-M70TdndPCR50r5Z2OYQ  passwd：0000), and put it into the /kgs folder.  
 Below are examples of how to run NER on CMedQANER dataset.
 ```
 CUDA_VISIBLE_DEVICES=0 ./run_ner_cmedqa.sh
