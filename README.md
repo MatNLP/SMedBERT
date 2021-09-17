@@ -1,9 +1,9 @@
 # SMedBERT
-Source code and dataset for [SMedBERT: A Knowledge-Enhanced Pre-trained Language Model withStructured Semantics for Medical Text Mining](https://github.com/algoflow19/SMedBERT/blob/main/SMedBERT.pdf)
+Source code and data for [SMedBERT: A Knowledge-Enhanced Pre-trained Language Model withStructured Semantics for Medical Text Mining](https://github.com/algoflow19/SMedBERT/blob/main/SMedBERT.pdf)
 
 
 ## Hi everyone!
-Our code is almost ready for your, while we have to checkout with DXY if the current KG and private owned datasets are allowed to be public. For now, we only release 5% of the entities in KG for you to play around. Feel free to open issue if you have any question. 
+Our code is almost ready for you, while we have to get permission from DXY [DXY](https://portal.dxy.cn/) whether the private owned datasets and KGs are allowed to be public or not. For now, we only release our code for you to train SMedBERT model with your Chinese medical data. If they agree to release the data, we will only release 5% of the entities in KG for you to play around. Feel free to open issue if you have any question. 
 
 ## Datasets:
 - [CMedQANER](https://github.com/alibaba-research/ChineseBLUE)
