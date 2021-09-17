@@ -23,7 +23,7 @@ We have include datasets with "open" licenses in the hub and for other datasets 
 - Download the KG embedding: (BaiduPan link：https://pan.baidu.com/s/19V-M70TdndPCR50r5Z2OYQ  passwd：0000), and put it into the /kgs folder.  
 - Example of how to run pre-training process.
 ```
-CUDA_VISIBLE_DEVICES=0 ./run_pretraining.py
+CUDA_VISIBLE_DEVICES=0 ./run_pretraining_stream.py
 ```
 - Example of how to run NER on CMedQANER dataset.
 ```
