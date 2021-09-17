@@ -55,7 +55,7 @@ entity_file.close()
 entity_dict_index2str ={value:key for key,value in entity_dict.items()}
 
 # keys = ['ent_embeddings', 'rel_embeddings']
-js_file=open('/home/dell/PycharmProjects/tmp_czr/KIM/OpenKE-master/embedding.vec.json','r',encoding='utf-8') # Note that we must add the first entity as EMPETY.
+js_file=open('./embedding.vec.json','r',encoding='utf-8') # Note that we must add the first entity as EMPETY.
 embedding_list=json.load(js_file)
 js_file.close()
 embedding_list=embedding_list['ent_embeddings']
@@ -63,9 +63,7 @@ embedding_list=embedding_list['ent_embeddings']
 
 def euclidean(p, q):
 
-    # 计算欧几里德距离,并将其标准化
     e = sum([(p[i] - q[i]) ** 2 for i in range(len(p))])
-    # return 1 / (1 + e ** .5)
     return e
 vecs = []
 vecs.append([0]*100) # CLS
@@ -74,42 +72,6 @@ for vec in embedding_list:
 embed = torch.FloatTensor(vecs)
 embed = torch.nn.Embedding.from_pretrained(embed)
 del vecs,embedding_list,js_file,entity_file
-
-# def collect_fn(x):
-#     print(type(x))
-#     x = torch.cat( tuple(xx.unsqueeze(0) for xx in x) , dim=0 )
-#     entity_idx = x[:, 4*args.max_seq_length:5*args.max_seq_length]
-#     # Build candidate
-#     uniq_idx = np.unique(entity_idx.numpy())
-#     ent_candidate = embed(torch.LongTensor(uniq_idx+1))
-#     ent_candidate = ent_candidate.repeat([n_gpu, 1])
-#     # build entity labels
-#     d = {}
-#     dd = []
-#     for i, idx in enumerate(uniq_idx):
-#         d[idx] = i
-#         dd.append(idx)
-#     ent_size = len(uniq_idx)-1
-#     def map(x):
-#         if x == -1:
-#             return -1
-#         else:
-#             rnd = random.uniform(0, 1)
-#             if rnd < 0.05:
-#                 return dd[random.randint(1, ent_size)]
-#             elif rnd < 0.2:
-#                 return -1
-#             else:
-#                 return x
-#     ent_labels = entity_idx.clone()
-#     d[-1] = -1
-#     ent_labels = ent_labels.apply_(lambda x: d[x])
-#     entity_idx.apply_(map)
-#     ent_emb = embed(entity_idx+1)
-#     mask = entity_idx.clone()
-#     mask.apply_(lambda x: 0 if x == -1 else 1)
-#     mask[:,0] = 1
-#     return x[:,:args.max_seq_length], x[:,args.max_seq_length:2*args.max_seq_length], x[:,2*args.max_seq_length:3*args.max_seq_length], x[:,3*args.max_seq_length:4*args.max_seq_length], ent_emb, mask, x[:,6*args.max_seq_length:], ent_candidate, ent_labels
 
 class ERNIEDataset(Dataset):
     def __init__(self,*data):
@@ -126,33 +88,10 @@ class ERNIEDataset(Dataset):
 
 MAX_SEQ_LEN=512
 
-### End
-
-### Load the synset dict and len2word dict
-# MAX_SYN_USEAGE=30 # Note that since our synset is samll, we actually replace syn word as far as we can, and limit the useage.
-
-# 现有替换策略为预处理时先生成并标记增强样本，对于增强样本中的同义词，不进行mask预测，但同样可进行切分和分类以及特征词原子词相互预测。
-# syn_file=open('data_aug/syn.pkl','rb')
-# synset=pickle.load(syn_file)
-# syn_file.close()
-
-
-# len2word={} # use to produce negative sample, note that we can always use the corrpording word as postive sample.
-
-### End
-
-### creat the converter for type and entitiy
-# l2w_file=open('cut_word/l2w.pkl','rb')
-# len2word=pickle.load(l2w_file) # length of word and type back to word
-# l2w_file.close()
-### End
 
 WORD_CUTTING_MAX_PAIR=50
 GUEESS_ATOM_MAX_PAIR=50
 POS_NEG_MAX_PAIR=10
-
-# MAX_TARGET=32
-# MAX_NUM_PAIR=25
 
 SAVE_THELD=.1
 
@@ -194,9 +133,7 @@ def swap_exmples(args, tokenizer,masked_lm_prob,max_predictions_per_seq,max_num_
         
         tokens_a, masked_lm_positions, masked_lm_labels, entity_ids = create_wwm_lm_predictions(
                 tokens_a, masked_lm_prob, max_predictions_per_seq, isAug,vocab,tokenizer)
-        # We use the sop task. the simple implement that.
-        # head=tokens_a[:len(head)]
-        # tail=tokens_a[len(head):]
+        
         tokens=tokens_a
         segment_ids = [0 for _ in range(len(head)+2)]+ [ 1 for _ in range(len(tail)+1)]
         assert(len(segment_ids)==len(tokens) )
@@ -221,7 +158,6 @@ def swap_exmples(args, tokenizer,masked_lm_prob,max_predictions_per_seq,max_num_
                         temp_entity_ids_mapping_mask.append(0)
                 else:
                     if len(entity_mapping[entity_dict_index2str[entity_id]]) > args.two_hop_entity_num:
-                        # 因为相关的实体列表在存储的时候，感觉重要的周围实体在list后面，前面的是entity对应的标签，所以使用这个倒叙进行输出
                         for two_hop_entity in reversed(node2entity[entity_dict_index2str[entity_id]]):
                             if len(temp_entity_ids_mapping) != args.two_hop_entity_num:
                                 temp_entity_ids_mapping.append(entity_dict_copy[two_hop_entity])
@@ -242,10 +178,7 @@ def swap_exmples(args, tokenizer,masked_lm_prob,max_predictions_per_seq,max_num_
                             temp_entity_ids_mapping_mask.append(1)
             entity_ids_mapping.append(temp_entity_ids_mapping)
             entity_ids_mapping_mask.append(temp_entity_ids_mapping_mask)
-        # for data in entity_ids_mapping:
-        #     for data_i in data:
-        #         if type(data_i) != int:
-        #             print()
+       
         example = {
             "tokens": tokens,
             "segment_ids": segment_ids,
@@ -270,7 +203,6 @@ def swap_exmples(args, tokenizer,masked_lm_prob,max_predictions_per_seq,max_num_
             gc.collect()
     return_dict[idx]=file_names
 
-#logging.basicConfig(filename='logger.log', level=logging.INFO)
 logger = logging.getLogger(__name__)
 rng=Rd(43)
 import re
@@ -282,14 +214,6 @@ def warmup_linear(x, warmup=0.002):
 
 def is_chinese_char(cp):
         """Checks whether CP is the codepoint of a CJK character."""
-        # This defines a "chinese character" as anything in the CJK Unicode block:
-        #   https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)
-        #
-        # Note that the CJK Unicode block is NOT all Japanese and Korean characters,
-        # despite its name. The modern Korean Hangul alphabet is a different block,
-        # as is Japanese Hiragana and Katakana. Those alphabets are used to write
-        # space-separated words, so they are not treated specially and handled
-        # like the all of the other languages.
         cp=ord(cp)
         if ((cp >= 0x4E00 and cp <= 0x9FFF) or  #
                 (cp >= 0x3400 and cp <= 0x4DBF) or  #
@@ -326,8 +250,6 @@ def truncate_seq_pair(tokens_a, tokens_b, max_num_tokens, rng):
     trunc_tokens = tokens_a if len(tokens_a) > len(tokens_b) else tokens_b
     assert len(trunc_tokens) >= 1
 
-    # We want to sometimes truncate from the front and sometimes from the
-    # back to add more randomness and avoid biases.
     if rng.random() < 0.05: # I do not want you delete front because you cause the head always produce [UNK]
       del trunc_tokens[0]
     else:
@@ -345,9 +267,7 @@ def create_masked_lm_predictions(tokens, masked_lm_prob, max_predictions_per_seq
 
     num_to_mask = min(max_predictions_per_seq,
                       max(1, int(round(len(tokens) * masked_lm_prob))))
-    # print(num_to_mask)
-    # print("tokens", len(tokens))
-    # print("cand", len(cand_indices))
+    
     shuffle(cand_indices)
     mask_indices = sorted(sample(cand_indices, num_to_mask))
     masked_token_labels = []
@@ -380,7 +300,7 @@ def create_wwm_lm_predictions(tokens, masked_lm_prob, max_predictions_per_seq,is
 
     entity_pos=set()
     entity_ids=[] # This list would like [ [0] , [1,2] , [3,4,5]] to pack wwm word toghter
-                    # We use it to 保存分词预测和特征词原子词相互预测的位置
+                   
     cand_index=0
     skip_index=set()
     
@@ -463,9 +383,7 @@ def create_examples(args, data_path, max_seq_length, masked_lm_prob, max_predict
     gc.collect()
     for (i, line) in tqdm(enumerate(fr), desc="Creating Example"):
         if i == 158200:
-            # 将train的sample减小10倍的数据量
             break
-        # remove too short sample
         line,label=line.rsplit('\t',1)
         line=http_remover.sub("",line).replace('##',"").strip()
         count=0
@@ -476,8 +394,7 @@ def create_examples(args, data_path, max_seq_length, masked_lm_prob, max_predict
         lines.append(line+'\t'+label)
         idx+=1
         if(idx%batch_size==0):
-            # swap_exmples(args, tokenizer,masked_lm_prob,max_predictions_per_seq,max_num_tokens,lines,idx,return_dict,
-            #              node2entity, entity_dict)
+          
             job=Process(target=swap_exmples, args=(args,tokenizer,masked_lm_prob,max_predictions_per_seq,
                                                   max_num_tokens,lines,idx,return_dict, node2entity, entity_dict))
             jobs.append(job)
@@ -511,29 +428,16 @@ def create_examples(args, data_path, max_seq_length, masked_lm_prob, max_predict
         sf.close()
         result.extend(tmp)
         del tmp
-    # os.system('rm *_*.pkl')
     return result
-
-# def pos_dict(l,max_pre_line):
-#     return [ j+i*max_pre_line for i in range(len(l)) for j in range(len(l[i])) ]
 
 def convert_examples_to_features(args, examples, max_seq_length, tokenizer,do_gc=False):
     features = []
     example_num=len(examples)
     names_list=[]
     save_pre_step=max(int( .25 * example_num ) ,1 )
-    # print(save_pre_step)
-    # example = {
-    #         "tokens": tokens,
-    #         "segment_ids": segment_ids,
-    #         "masked_lm_positions": masked_lm_positions,
-    #         "masked_lm_labels": masked_lm_labels,
-    #         "entiy_ids": entiy_ids,
-    #         'sop_label':sop_label
-    #         }
+    
     for f_index in tqdm(range(example_num), desc="Converting Feature"):
-#    for i, example in enumerate(examples):
-        # print(f_index)
+
         example=examples[-1]
         tokens = example["tokens"]
         segment_ids = example["segment_ids"]
@@ -556,7 +460,6 @@ def convert_examples_to_features(args, examples, max_seq_length, tokenizer,do_gc
 
         entiy_ids = example["entiy_ids"]
         sop_label=example['sop_label']
-        # print(list(zip(tokens,range(len(tokens)))))
 
         assert len(tokens) == len(segment_ids) <= max_seq_length  # The preprocessed data should be already truncated
 
@@ -578,8 +481,7 @@ def convert_examples_to_features(args, examples, max_seq_length, tokenizer,do_gc
 
         entity_array=np.full(max_seq_length, dtype=np.int, fill_value=-1)
         entity_array[:len(entiy_ids)]= entiy_ids
-        # seg_label_array = np.full(max_seq_length, dtype=np.int, fill_value=-1)
-        # seg_label_array[seg_positions] = seg_labels
+        
         
         feature = InputFeatures(input_ids=input_array,
                                 input_mask=mask_array,
@@ -653,38 +555,12 @@ def evaluate(args,model,eval_dataloader1, eval_dataloader2, device,loss_bag, eva
     return min(best_loss, eval_loss)
 
 
-#pretrain_train_path = "data/new_train_corpus.txt"
-#pretrain_dev_path = "data/dev.txt"
-#max_seq_length = 512
-#do_train = True
-#do_lower_case = True
-#train_batch_size = 16
-#eval_batch_size = 16
-#learning_rate = 1e-5 # 1e-4
-#num_train_epochs = 2
-#warmup_proportion = 0.1
-#no_cuda = False
-#local_rank = -1
-#seed = 42
-#gradient_accumulation_steps = 1
-#fp16 = False
-#loss_scale = 0.
-#bert_config_json = "pytorch_pretrained_bert/bert_config.json"
-#vocab_file = "pytorch_pretrained_bert/vocab.txt"
-#output_dir = "outputs"
-#masked_lm_prob = 0.15
-#max_predictions_per_seq = 72
-#cache_dir='pytorch_pretrained_bert'
-#model_name_or_path='pytorch_pretrained_bert'
-
-
 def main():
     parser = argparse.ArgumentParser()
-    # parser.add_argument("--pretrain_train_path", type=str, default="data_aug/rep_train.txt", help="pretrain train path to file")
-    # parser.add_argument("--pretrain_dev_path", type=str, default="data_aug/rep_dev.txt", help="pretrain dev path to file")
+    
 
-    parser.add_argument("--pretrain_train_path", type=str, default="/home/dell/PycharmProjects/medBERT/our_medBERT_version1/data_aug/aug_dev.txt", help="pretrain train path to file")
-    parser.add_argument("--pretrain_dev_path", type=str, default="/home/dell/PycharmProjects/medBERT/our_medBERT_version1/data_aug/aug_dev.txt", help="pretrain dev path to file")
+    parser.add_argument("--pretrain_train_path", type=str, default="./data_aug/aug_dev.txt", help="pretrain train path to file")
+    parser.add_argument("--pretrain_dev_path", type=str, default="./data_aug/aug_dev.txt", help="pretrain dev path to file")
     parser.add_argument("--max_seq_length", type=int, default=512,help="max seq length of input sequences")
 
     parser.add_argument("--do_train", type=bool,default=True, help="If do train")
@@ -702,7 +578,7 @@ def main():
     parser.add_argument("--loss_scale", type=int, default=0, help="loss_scale")
     parser.add_argument("--bert_config_json", type=str, default="pytorch_pretrained_bert/bert_config.json", help="bert_config_json")
     parser.add_argument("--vocab_file", type=str, default="pytorch_pretrained_bert/vocab.txt", help="Path to vocab file")
-    parser.add_argument("--output_dir", type=str, default="/home/dell/PycharmProjects/our_medBERT_version2_knowledge_diff/outputs", help="output_dir")
+    parser.add_argument("--output_dir", type=str, default="./outputs", help="output_dir")
     parser.add_argument("--masked_lm_prob", type=float, default=0.15, help="masked_lm_prob")
     parser.add_argument("--max_predictions_per_seq", type=int, default=72, help="max_predictions_per_seq")
     parser.add_argument("--cache_dir", type=str, default='pytorch_pretrained_bert', help="cache_dir")
@@ -710,8 +586,8 @@ def main():
     parser.add_argument('--eval_pre_setp',type=float,default=.1,help="The percent of how many train with one eval run")
     parser.add_argument('--finetune_proportion',type=float,default=.5,help="Detemind the proportion of the first training stage")
     parser.add_argument('--two_hop_entity_num', default=5, type=int, help='The threshold value of two hop entities of each entities in knowledge graph')
-    parser.add_argument('--entity_type', default='/home/dell/PycharmProjects/our_medBERT_version2_knowledge_diff/kg_embed/type_set.pkl', type=str, help='entity type in knowledge graph')
-    parser.add_argument('--node2entity', default='/home/dell/PycharmProjects/tmp_czr/KIM/OpenKE-master/new_n2e.pkl', type=str, help='target node to other entity relationship')
+    parser.add_argument('--entity_type', default='./kg_embed/type_set.pkl', type=str, help='entity type in knowledge graph')
+    parser.add_argument('--node2entity', default='./new_n2e.pkl', type=str, help='target node to other entity relationship')
     args=parser.parse_args()
 
     with open(args.entity_type, 'rb') as fo:
@@ -742,9 +618,6 @@ def main():
 
     args.train_batch_size = args.train_batch_size // args.gradient_accumulation_steps
 
-#    set_seed(args.seed)
-#    np.random.seed(args.seed)
-#    torch.manual_seed(args.seed)
     if n_gpu > 0:
         torch.cuda.manual_seed_all(args.seed)
 
@@ -777,20 +650,13 @@ def main():
             len(train_examples) / args.train_batch_size/ args.gradient_accumulation_steps) * args.num_train_epochs
         if args.local_rank != -1:
             num_train_optimization_steps = num_train_optimization_steps // torch.distributed.get_world_size()
-            # num_train_optimization_steps = num_train_optimization_steps
-
-
-#    config=BertConfig.from_json_file(args.bert_config_j    son)
+            
         model,missing_keys = ERNIEForPreTraining.from_pretrained(
             args.model_name_or_path,
-#   config=args.bert_config_json,
             from_tf=bool(".ckpt" in args.model_name_or_path),
             cache_dir=args.cache_dir
         )
     
-    # for key,param in model.named_parameters(recurse=True):
-    #     print(key)
-
     if args.fp16:
         model.half()
     model.to(device)
@@ -805,22 +671,13 @@ def main():
     elif n_gpu > 1:
         model = torch.nn.DataParallel(model)
     
-    # for key,param in model.named_parameters(recurse=True):
-        # print(key)
-    
     # Prepare optimizer
     param_optimizer = list(model.named_parameters())
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
 
     new_add_param = [ (n,p)  for n,p in param_optimizer if n in missing_keys ]
     pretrain_parm = [ (n,p)  for n,p in param_optimizer if n not in missing_keys ]
-    # print('new_add_param',new_add_param)
-    # print('pretrain_param',pretrain_parm)
-
-    # optimizer_grouped_parameters = [
-    #     {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
-    #     {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
-    # ]
+    
     new_optimizer_grouped_parameters = [
         {'params': [p for n, p in new_add_param if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
         {'params': [p for n, p in new_add_param if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
@@ -850,10 +707,7 @@ def main():
     else:
         optimizer = AdamW(new_optimizer_grouped_parameters,
                              lr=args.learning_rate)
-        # scheduler = get_double_linear_schedule_with_warmup(optimizer,args.num_training_steps,args.warmup_proportion)
-        # Note The schedule set the new warm start right at the half of training process.
-        # scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_proportion*num_train_optimization_steps, 
-                                # num_training_steps=num_train_optimization_steps)
+        
     global_step = 0
     best_loss = 100000
 #    eval_pern_steps=570
@@ -924,8 +778,6 @@ def main():
             train_sampler2 = SequentialSampler(train_data2)
 
         def collect_fn(x):
-            # x = torch.from_numpy(np.array([xx for xx in x])).long()
-
             x = torch.cat(tuple(xx.unsqueeze(0) for xx in x) , dim=0)
             entity_idx = x[:, 4*args.max_seq_length:5*args.max_seq_length]
             uniq_idx = np.unique(entity_idx.numpy())
@@ -951,18 +803,12 @@ def main():
                         return x
             ent_labels = entity_idx.clone()
             d[-1] = -1
-            # ent_labels 将实体的在vocub里面的索引值替换成了1,2,3...等等连续的标签值
             ent_labels = ent_labels.apply_(lambda x: d[x])
-            # entity_idx 表示使用map函数将预训练中的标签值按照之前的比例进行替换
             entity_idx.apply_(map)
-            # 获取训练好的实体embedding结果
             ent_emb = embed(entity_idx+1)
             mask = entity_idx.clone()
             mask.apply_(lambda x: 0 if x == -1 else 1)
             mask[:,0] = 1
-            # next_sentence_label=x[:,5*args.max_seq_length:]
-            # print(ent_labels)
-            # print(d)
             assert(len(ent_labels))
 
             return x[:,:args.max_seq_length], x[:,args.max_seq_length:2*args.max_seq_length], \
@@ -989,18 +835,11 @@ def main():
         logger.info("Start Train...")
         for e in trange(int(args.num_train_epochs), desc="Epoch"):
             nb_tr_examples = 0
-            # for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
             for step, batch in enumerate(zip(train_dataloader1, train_dataloader2)):
                 batch0 = tuple(t.to(device) for t in batch[0])
                 each_token_condidate_entity = tuple(t.to(device) for t in batch[1])[0]
                 each_token_condidate_entity_mask = tuple(t.to(device) for t in batch[1])[1]
 
-                # masked_position 用在了标记mask_lm_labels 上
-                # input_ent：表示经过了mask机制（三种）之后的每个位置的表示[每个位置都有实体表示：缺省是0] ent_mask：表示针对输入实体的mask结果
-                # ent_candidate: 真实的匹配到的实体的表示 ent_labels（将index特殊化处理，由原来的真实embedding vocub中index变成了1 2 3连续的索引, 如果token没有实体匹配，那就是-1）
-                # input_ids input_mask masked_lm_labels (这三者是一套) + 句子种类标签segment_id
-                # input_ent ent_mask ent_labels (这三者是一套) + 实体候选（ent_candidate）
-                # mask仅仅是用0或者1来掩码计算，真正的对应到词表或者实体表需要用label进行标记
                 input_ids, input_mask, segment_ids, masked_lm_labels, input_ent, ent_mask, next_sentence_label, \
                 ent_candidate, ent_labels = batch0
                 loss = model(input_ids, input_mask, segment_ids, masked_lm_labels, input_ent, ent_mask,
