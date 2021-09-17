@@ -25,9 +25,6 @@ from pytorch_pretrained_bert.file_utils import WEIGHTS_NAME, CONFIG_NAME, MAX_TA
 
 from pytorch_pretrained_bert.modeling import BertForHyperPreTraining, cMeForPreTraining, BertConfig
 
-# Note that we use the sop, rather than nsp task.
-# from code.knowledge_bert.modeling import BertForPreTraining
-
 from pytorch_pretrained_bert.tokenization import BertTokenizer
 from pytorch_pretrained_bert.Trie import Trie
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup, get_double_linear_schedule_with_warmup
@@ -40,7 +37,6 @@ import torch.distributed as dist
 import time
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-# torch.autograd.set_detect_anomaly(True)
 
 ww_lables = None
 with open('ww_sim/labels.pkl','rb') as wf:
@@ -79,11 +75,9 @@ mask_count = dict.fromkeys(entity_dict.keys(), MAX_PRE_ENTITY_MASK)
 for key in entity_dict.keys():
     if (len(key) > 1 and not key.isdigit()):
         ww_tree.insert(key)
-    # entity_dict[key] += 1  # For the zero embedding is used as Pad ebmedding.
 
 entity_dict_index2str = {value: key for key, value in entity_dict.items()}
 
-# keys = ['ent_embeddings', 'rel_embeddings']
 js_file = open('kgs/transr_transr.json', 'r',
                encoding='utf-8')  # Note that we must add the first entity as EMPTY.
 js_dict = json.load(js_file)
@@ -98,19 +92,14 @@ assert(len(transfer_matrix_list) == len(relation_list))
 for i in range(len(transfer_matrix_list)):
     transfer_matrix_list[i].extend(relation_list[i])
 
-# transfer_matrix_list = [[0]*(r_dim*e_dim)] + transfer_matrix_list
 transfer_matrix = torch.FloatTensor(transfer_matrix_list)
 transfer_matrix = transfer_matrix.view(transfer_matrix.size(0),r_dim,e_dim+1)
 transfer_matrix = torch.bmm(transfer_matrix.transpose(-1,-2),transfer_matrix)
 transfer_matrix = torch.cat((torch.zeros(1,e_dim+1,e_dim+1),transfer_matrix),dim=0)
 transfer_matrix = torch.nn.Embedding.from_pretrained(transfer_matrix.view(-1,(e_dim+1)*(e_dim+1)),freeze=False)
 
-# ['zero_const', 'pi_const', 'ent_embeddings.weight', 'rel_embeddings.weight', 'transfer_matrix.weight']
-
 def euclidean(p, q):
-    # 计算欧几里德距离,并将其标准化
     e = sum([(p[i] - q[i]) ** 2 for i in range(len(p))])
-    # return 1 / (1 + e ** .5)
     return e
 
 
@@ -122,62 +111,16 @@ embedding_list = vecs
 embed = torch.FloatTensor(vecs)
 embed = torch.nn.Embedding.from_pretrained(embed,freeze=False)
 
-# print(len(embedding_list))
-# print(len(entity_dict))
-# print(max(entity_dict.values()))
-# del vecs, embedding_list, js_file, entity_file
-# predefined_entity_type = ['药品', '疾病', '症状', '其他', '缺省']
-# type_embed = torch.randn(len(predefined_entity_type), 100).float()
-# type_embed = torch.nn.Embedding.from_pretrained(type_embed)
 del  js_file, entity_file
 MAX_SEQ_LEN = 512
 WORD_CUTTING_MAX_PAIR = 50
 GUEESS_ATOM_MAX_PAIR = 50
 POS_NEG_MAX_PAIR = 10
 
-# MAX_TARGET=32
-# MAX_NUM_PAIR=25
-
 SAVE_THELD = .1
 logger = logging.getLogger(__name__)
 rng = Rd(43)
 import re
-
-# def collect_fn(x):
-#     print(type(x))
-#     x = torch.cat( tuple(xx.unsqueeze(0) for xx in x) , dim=0 )
-#     entity_idx = x[:, 4*args.max_seq_length:5*args.max_seq_length]
-#     # Build candidate
-#     uniq_idx = np.unique(entity_idx.numpy())
-#     ent_candidate = embed(torch.LongTensor(uniq_idx+1))
-#     ent_candidate = ent_candidate.repeat([n_gpu, 1])
-#     # build entity labels
-#     d = {}
-#     dd = []
-#     for i, idx in enumerate(uniq_idx):
-#         d[idx] = i
-#         dd.append(idx)
-#     ent_size = len(uniq_idx)-1
-#     def map(x):
-#         if x == -1:
-#             return -1
-#         else:
-#             rnd = random.uniform(0, 1)
-#             if rnd < 0.05:
-#                 return dd[random.randint(1, ent_size)]
-#             elif rnd < 0.2:
-#                 return -1
-#             else:
-#                 return x
-#     ent_labels = entity_idx.clone()
-#     d[-1] = -1
-#     ent_labels = ent_labels.apply_(lambda x: d[x])
-#     entity_idx.apply_(map)
-#     ent_emb = embed(entity_idx+1)
-#     mask = entity_idx.clone()
-#     mask.apply_(lambda x: 0 if x == -1 else 1)
-#     mask[:,0] = 1
-#     return x[:,:args.max_seq_length], x[:,args.max_seq_length:2*args.max_seq_length], x[:,2*args.max_seq_length:3*args.max_seq_length], x[:,3*args.max_seq_length:4*args.max_seq_length], ent_emb, mask, x[:,6*args.max_seq_length:], ent_candidate, ent_labels
 
 def key_fn(obj):
     idx = entity_dict[obj[0]]-1
@@ -210,8 +153,7 @@ class OurENRIEDataset(Dataset):
     def __getitem__(self, index):
         example = self.examples[index]
         line = example.rstrip()
-        # line = self.http_remover.sub("", line).replace('##', "").strip()
-        # line = line 
+        
         example = self.__get_example__(line)
         
         example_a = {
@@ -237,30 +179,6 @@ class OurENRIEDataset(Dataset):
         tokens_a = self.tokenizer.tokenize(a)
         tokens_b = self.tokenizer.tokenize(b)
 
-        # insert_pos = len(tokens_a) // 2
-        # offset = 0
-        # while (tokens_a[insert_pos].startswith('##')):
-        #     if (not tokens_a[insert_pos - offset].startswith('##')):
-        #         insert_pos -= offset
-        #         break
-        #     elif (not tokens_a[insert_pos + offset].startswith('##')):
-        #         insert_pos += offset
-        #         break
-        #     offset += 1
-        #     if (insert_pos - offset < 0 or insert_pos + offset >= len(tokens_a)):
-        #         print('Head Hard Found for sentence: {}'.format(tokens_a))
-        #         break
-        # head = tokens_a[:insert_pos]
-        # tail = tokens_a[insert_pos:]
-        # if (len(tokens_a) > self.max_num_tokens):
-        #     truncate_seq_pair(head, tail, self.max_num_tokens, rng)
-        # sop_label = 0
-        # if (random() > .5):
-        #     head, tail = tail, head
-        #     sop_label = 1
-        # if (head[0].startswith('##')): head[0] = head[0][2:]
-        # tokens_a = ["[CLS]"] + head + ["[SEP]"] + tail + ["[SEP]"]
-
         tokens_a = ['[CLS]'] + tokens_a + ['[SEP]']
         tokens_b = ['[CLS]'] + tokens_b + ['[SEP]']
         
@@ -271,11 +189,6 @@ class OurENRIEDataset(Dataset):
         
         segment_ids_a = [0] * len(tokens_a)
         segment_ids_b = [0] * len(tokens_b)
-
-        # one_hop_entity_ids = np.array(len(tokens),dtype=np.int)
-        # one_hop_entity_types = np.zeros(len(tokens),args.two_hop_entity_num)
-        # two_hop_entity_ids = np.zeros(len(tokens),args.two_hop_entity_num)
-        # two_hop_entity_types = np.zeros(len(tokens),args.two_hop_entity_num)
 
         example = {
             "tokens_a": tokens_a,
@@ -371,35 +284,10 @@ class OurENRIEDataset(Dataset):
         all_input_ids = torch.tensor(f.input_ids, dtype=torch.long)
         all_input_mask = torch.tensor(f.input_mask, dtype=torch.long)
         all_segment_ids = torch.tensor(f.segment_ids, dtype=torch.long)
-        # all_label_ids = torch.tensor(f.label_id, dtype=torch.long)
-        # all_sop_labels = torch.tensor(f.sop_label, dtype=torch.long).unsqueeze(-1)
-
-        # 一阶实体相关的变量：一阶实体每个token位置就一个，不需要mask，直接最后用input_mask即可
-        # all_one_hop_entity_ids = torch.tensor(f.kc_entity_one_hop_ids, dtype=torch.long)
-        # all_one_hop_entity_types = torch.tensor(f.kc_entity_one_hop_types, dtype=torch.long)
-        # all_one_hop_entity_types_repre = self.type_embedd(all_one_hop_entity_types)
-
-        # 二阶实体相关变量
-        # 8*512*7
-        # all_two_hop_entity_ids = torch.tensor(f.two_hop_entity_ids, dtype=torch.long)
-        # all_two_hop_entity_repre = embed(all_two_hop_entity_ids + 1)
-
-        # 8*512*7 (取-1进行mask)
-        # all_two_hop_entity_mask = torch.tensor(f.entity_mapping_mask, dtype=torch.long)
-
-        # 8*512*7*5
-        # all_two_hop_entity_types = torch.tensor(f.two_hop_entity_types, dtype=torch.long)
-
-        # 8*512*5
-        # all_two_hop_entity_type_mask = torch.tensor(f.two_hop_entity_type_mask, dtype=torch.long)
-
-        # 8*512*7
-        # all_two_hop_entity_type_index_select = torch.tensor(f.two_hop_entity_type_index_select, dtype=torch.long)
-        # print(f.kc_entity_one_hop_ids.shape)
+       
         kc_entity_one_hop_ids = torch.tensor(f.kc_entity_one_hop_ids, dtype=torch.long)
         kc_entity_one_hop_types = torch.tensor(f.kc_entity_one_hop_types, dtype=torch.long)
-        # print(kc_entity_one_hop_ids.size())
-        # print(kc_entity_one_hop_types.size())
+       
         kc_entity_se_index = torch.tensor(f.kc_entity_se_index, dtype=torch.long)
         kc_entity_two_hop_labels = torch.tensor(f.kc_entity_two_hop_labels, dtype=torch.long)
         kc_entity_out_or_in = torch.tensor(f.kc_entity_out_or_in, dtype=torch.long)
@@ -410,16 +298,13 @@ class OurENRIEDataset(Dataset):
                  kc_entity_one_hop_types) #+ (all_two_hop_entity_ids, all_two_hop_entity_types)
                  +(kc_entity_se_index, kc_entity_two_hop_labels, kc_entity_out_or_in, kc_entity_two_hop_rel_types,kc_entity_two_hop_types,kc_entity_infusion_pos)
                  )
-        # one example has 11 features.
 
     def __len__(self):
         return len(self.examples)
 
     def __read_data__(self):
         fr = open(self.data_path, "r", encoding='utf-8')
-        # self.http_remover = re.compile(r'https?://[a-zA-Z0-9.%+()/&:;<=●>?@^_`{|}~]*', re.S)
         examples = fr.readlines()
-        # max_total_example=len(exmaples)
         lines = []
         for line in tqdm(examples, desc='loading train / dev examples'):
             lines.append(line)
@@ -427,29 +312,6 @@ class OurENRIEDataset(Dataset):
         fr.close()
 
 
-
-### End
-
-### Load the synset dict and len2word dict
-# MAX_SYN_USEAGE=30 # Note that since our synset is samll, we actually replace syn word as far as we can, and limit the useage.
-
-# 现有替换策略为预处理时先生成并标记增强样本，对于增强样本中的同义词，不进行mask预测，但同样可进行切分和分类以及特征词原子词相互预测。
-# syn_file=open('data_aug/syn.pkl','rb')
-# synset=pickle.load(syn_file)
-# syn_file.close()
-
-
-# len2word={} # use to produce negative sample, note that we can always use the corrpording word as postive sample.
-
-### End
-
-### creat the converter for type and entitiy
-# l2w_file=open('cut_word/l2w.pkl','rb')
-# len2word=pickle.load(l2w_file) # length of word and type back to word
-# l2w_file.close()
-### End
-
-# logging.basicConfig(filename='logger.log', level=logging.INFO)
 def warmup_linear(x, warmup=0.002):
     if x < warmup:
         return x / warmup
@@ -457,15 +319,7 @@ def warmup_linear(x, warmup=0.002):
 
 
 def is_chinese_char(cp):
-    """Checks whether CP is the codepoint of a CJK character."""
-    # This defines a "chinese character" as anything in the CJK Unicode block:
-    #   https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)
-    #
-    # Note that the CJK Unicode block is NOT all Japanese and Korean characters,
-    # despite its name. The modern Korean Hangul alphabet is a different block,
-    # as is Japanese Hiragana and Katakana. Those alphabets are used to write
-    # space-separated words, so they are not treated specially and handled
-    # like the all of the other languages.
+   
     cp = ord(cp)
     if ((cp >= 0x4E00 and cp <= 0x9FFF) or  #
             (cp >= 0x3400 and cp <= 0x4DBF) or  #
@@ -510,8 +364,6 @@ def truncate_seq_pair(tokens_a, tokens_b, max_num_tokens, rng):
         trunc_tokens = tokens_a if len(tokens_a) > len(tokens_b) else tokens_b
         assert len(trunc_tokens) >= 1
 
-        # We want to sometimes truncate from the front and sometimes from the
-        # back to add more randomness and avoid biases.
         if rng.random() < 0.05:  # I do not want you delete front because you cause the head always produce [UNK]
             del trunc_tokens[0]
         else:
@@ -529,9 +381,7 @@ def create_masked_lm_predictions(tokens, masked_lm_prob, max_predictions_per_seq
 
     num_to_mask = min(max_predictions_per_seq,
                       max(1, int(round(len(tokens) * masked_lm_prob))))
-    # print(num_to_mask)
-    # print("tokens", len(tokens))
-    # print("cand", len(cand_indices))
+    
     shuffle(cand_indices)
     mask_indices = sorted(sample(cand_indices, num_to_mask))
     masked_token_labels = []
@@ -666,8 +516,7 @@ def convert_examples_to_features(args, examples, max_seq_length, tokenizer):
     save_pre_step = max(int(.25 * example_num), 1)
 
     for f_index in tqdm(range(example_num), desc="Converting Feature"):
-        #    for i, example in enumerate(examples):
-        # print(f_index)
+        
         example = examples[-1]
         tokens = example["tokens"]
         segment_ids = example["segment_ids"]
@@ -690,7 +539,6 @@ def convert_examples_to_features(args, examples, max_seq_length, tokenizer):
 
         entiy_ids = example["entiy_ids"]
         sop_label = example['sop_label']
-        # print(list(zip(tokens,range(len(tokens)))))
 
         assert len(tokens) == len(segment_ids) <= max_seq_length  # The preprocessed data should be already truncated
 
@@ -712,8 +560,6 @@ def convert_examples_to_features(args, examples, max_seq_length, tokenizer):
 
         entity_array = np.full(max_seq_length, dtype=np.int, fill_value=-1)
         entity_array[:len(entiy_ids)] = entiy_ids
-        # seg_label_array = np.full(max_seq_length, dtype=np.int, fill_value=-1)
-        # seg_label_array[seg_positions] = seg_labels
 
         feature = InputFeatures(input_ids=input_array,
                                 input_mask=mask_array,
@@ -761,12 +607,8 @@ def evaluate(args, model, eval_dataloader, device, loss_bag, eval_step):
     eval_loss = 0
     nb_eval_steps = 0
     for batch in eval_dataloader:
-        # logger.info('Testing step: {} / {}'.format(nb_eval_steps, eval_step))
         batch0 = tuple(t.to(device) for t in batch)
 
-        # input_ids, input_mask, segment_ids, label_ids, one_hop_entity_ids, \
-        # one_hop_entity_types, sop_labels, two_hop_entity_ids, two_hop_entity_type, \
-        # two_hop_entity_type_mask, two_hop_entity_type_index_select = batch0
 
 
         with torch.no_grad():
@@ -790,8 +632,7 @@ def evaluate(args, model, eval_dataloader, device, loss_bag, eval_step):
     return min(best_loss, eval_loss)
 
 def entity_info(args):
-    # #实体类型：{'西药', '疾病', '疾', '分类', '中药', '检查', '中西症状', '药品', '科室', '中医症状', '部位', '西医症状', '症状', '检验'}
-    # DXY 实体类型: {'药品', '日常用品', '地区', '疾病', '检验', '特殊人群', '大众医学词汇', '身体部位', '微生物病原体', '检查检验结果', '医院', '症状', '非手术治疗', '季节', '行为活动', '食品', '检查', '科室', '基因', '科室传染性湿疹样', '机构', '外界环境因素', '症状"', '手术治疗', '疾病"', '医疗器械'}
+   
     with open(args.entity_type, 'rb') as fo:
         entity_type_dict = pickle.load(fo, encoding='utf-8')
     with open(args.entityOutNegbhor,'rb') as fo:
@@ -815,7 +656,6 @@ def entity_info(args):
     return  node2entity, entity_type_dict,entityOutNegbhor,entityInNegbhor
 
 def entity_type_initialize(entity2type):
-    # predefined_entity_type = ['药品', '疾病', '症状', '其他', '缺省']
     
     type_set = set(entity2type.values())
     type2embed = {}
@@ -890,7 +730,7 @@ def main():
                         type=str, help='target node to other entity relationship')
     
     args = parser.parse_args()
-    # 获取实体相关信息
+    
     node2entity, combine_entity_type_dict,entityOutNegbhor,entityInNegbhor = entity_info(args)
     type2id,type_embedd = entity_type_initialize(combine_entity_type_dict)
 
@@ -926,7 +766,6 @@ def main():
         os.makedirs(args.output_dir)
 
     tokenizer = BertTokenizer.from_pretrained(pretrained_model_name_or_path=args.model_name_or_path)
-    # train_examples = None
     num_train_optimization_steps = None
 
     if args.do_train:
@@ -973,21 +812,14 @@ def main():
         model.half()
     model.to(device)
     if args.local_rank != -1:
-        # try:
-        #     from apex.parallel import DistributedDataParallel as DDP
-        # except ImportError:
-        #     raise ImportError(
-        #         "Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
+        
         model = DDP(model,device_ids=[args.local_rank], output_device=args.local_rank)
         # pass
     elif n_gpu > 1:
         assert(False)
         model = torch.nn.DataParallel(model)
     n_gpu = max(n_gpu, 1)
-    # for key,param in model.named_parameters(recurse=True):
-    # print(key)
-
-    # Prepare optimizer
+    
     param_optimizer = list(model.named_parameters())
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
 
@@ -1023,13 +855,9 @@ def main():
     else:
         optimizer = AdamW(new_optimizer_grouped_parameters,
                           lr=args.learning_rate)
-        # scheduler = get_double_linear_schedule_with_warmup(optimizer,args.num_training_steps,args.warmup_proportion)
-        # Note The schedule set the new warm start right at the half of training process.
-        # scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_proportion*num_train_optimization_steps,
-        # num_training_steps=num_train_optimization_steps)
+        
     global_step = 0
     best_loss = 100000
-    #    eval_pern_steps=570
 
     if args.do_train:
 
@@ -1043,11 +871,8 @@ def main():
 
         train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size,
                                        num_workers=3,pin_memory=True)
-        # train_dataloader2 = DataLoader(train_data2, sampler=train_sampler2, batch_size=args.train_batch_size, shuffle=False)
         model.train()
-        # Run prediction for full data
-        # eval_sampler1 = SequentialSampler(eval_data1)
-        # eval_sampler2 = SequentialSampler(eval_data2)
+        
         eval_sampler = None
         if(args.local_rank != -1):
             eval_sampler = DistributedSampler(eval_dataset,shuffle=False)
@@ -1077,18 +902,15 @@ def main():
                     sample_num = 11
                     a = batch0[:sample_num]
                     b = batch0[sample_num:]
-                    # tic = time.time()
                     seq_a = model(*a)
                     seq_b = model(*b)
-                    # toc = time.time()
-                    # print(toc-tic)
+                    
 
                     seg_ids_a = a[1]
                     seg_ids_b = b[1]
                     use_count_a = torch.sum(seg_ids_a,dim=1)
                     use_count_b = torch.sum(seg_ids_b,dim=1)
                     batch_size = use_count_a.size(0)
-                    # tic = time.time()
                     for i in range(batch_size):
                         rep1 = torch.mean(seq_a[i][1:use_count_a[i]-2],dim=0)
                         rep2 = torch.mean(seq_b[i][1:use_count_b[i]-2],dim=0)
@@ -1120,37 +942,6 @@ def main():
                     goods.append(right)
                 print('Best ACC:',max(goods))
                 exit(0)
-                    # loss = model(*batch0)
-
-                    # if n_gpu > 1:
-                    #     loss = loss.mean()  # mean() to average on multi-gpu.
-                    # if args.gradient_accumulation_steps > 1:
-                    #     loss = loss / args.gradient_accumulation_steps
-                    # if args.fp16:
-                    #     optimizer.backward(loss)
-                    # else:
-                    #     loss.backward()
-                    # nb_tr_examples += train_dataloader.batch_size
-                    # tr_loss += loss.item() * args.gradient_accumulation_steps
-                    # loss_step += 1
-                    # if (step + 1) % args.gradient_accumulation_steps == 0:
-                    #     if args.fp16:
-                    #         lr_this_step = args.learning_rate * warmup_linear(global_step / num_train_optimization_steps,
-                    #                                                           args.warmup_proportion)
-                    #         for param_group in optimizer.param_groups:
-                    #             param_group['lr'] = lr_this_step
-                    #     optimizer.step()
-                    #     scheduler.step()
-                    #     optimizer.zero_grad()
-                    #     global_step += 1
-                    #     if (global_step == int(total_step * args.finetune_proportion)):
-                    #         optimizer.add_param_group(old_optimizer_grouped_parameters)
-
-                    # if ((step + 1) % eval_step) == 0:
-                    #     best_loss = evaluate(args, model, eval_dataloader, device, (best_loss, e, tr_loss / loss_step),
-                    #                          total_eval_step)
-                    #     tr_loss = 0
-                    #     loss_step = 0
         if(args.local_rank <=0):
             logger.info('Training Done!')
 
