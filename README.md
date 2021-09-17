@@ -15,9 +15,9 @@ Source code and data for [SMedBERT: A Knowledge-Enhanced Pre-trained Language Mo
 We have include datasets with "open" licenses in the hub and for other datasets you may have to acquire them by your own.
 
 ## Usage
-Download the Pre-trained Model (BaiduPan link: https://pan.baidu.com/s/1T0L6uv3JzY6dT3mcX_mghQ passwd: ea6f), and put it into the main folder.  
-Download the KG embedding: (BaiduPan link：https://pan.baidu.com/s/19V-M70TdndPCR50r5Z2OYQ  passwd：0000), and put it into the /kgs folder.  
-Below are examples of how to run NER on CMedQANER dataset.
+- Download the Pre-trained Model (BaiduPan link: https://pan.baidu.com/s/1T0L6uv3JzY6dT3mcX_mghQ passwd: ea6f), and put it into the main folder.  
+- Download the KG embedding: (BaiduPan link：https://pan.baidu.com/s/19V-M70TdndPCR50r5Z2OYQ  passwd：0000), and put it into the /kgs folder.  
+- Below are examples of how to run NER on CMedQANER dataset.
 ```
 CUDA_VISIBLE_DEVICES=0 ./run_ner_cmedqa.sh
 ```
