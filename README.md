@@ -5,6 +5,10 @@ Source code and data for [SMedBERT: A Knowledge-Enhanced Pre-trained Language Mo
 - Python 3.6
 - PyTorch 1.6
 - transformers==2.2.1
+- numpy
+- tqdm
+- scikit-learn
+- jieba
 
 ## Datasets:
 - [CMedQANER](https://github.com/alibaba-research/ChineseBLUE)
