@@ -21,6 +21,10 @@ Our code is almost ready for you. Due to the importance of commercial KG, we hav
 
 We release datasets with "open" licenses in the hub and for other datasets you may have to acquire them by your own.
 
+## Use your own KG (New).
+### KG format:
+Our framework only need to use entities( with their corresponding alias) and relations bewteen them in your KG.In fact, the alias are only used to linking the spans in the input sentence to the enities in KG, and so when a custom entit-linker is available for your KG, the alias are not nessary.
+
 ## Usage
 - Download the Pre-trained Model (BaiduPan link: https://pan.baidu.com/s/1T0L6uv3JzY6dT3mcX_mghQ passwd: ea6f), and put it into the main folder.  
 - Download the KG embedding: (BaiduPan link：https://pan.baidu.com/s/19V-M70TdndPCR50r5Z2OYQ  passwd：0000), and put it into the /kgs folder.  
