@@ -22,6 +22,7 @@ Our code is almost ready for you. Due to the importance of commercial KG, we hav
 We release datasets with "open" licenses in the hub and for other datasets you may have to acquire them by your own.
 
 ## Use your own KG (New).
+Since the Authorization in DXY is very slow, and keeping people always waiting is embarrassing. I summarize the pre-training process as follow so you can use your own KG to play the model!
 ### KG format.
 Our framework only need to use entities( with their corresponding alias and types) and relations bewteen them in your KG. In fact, the alias are only used to linking the spans in the input sentence to the enities in KG, and so when a custom entit-linker is available for your KG, the alias are not nessary.
 ### Step 1: Train TransR embedding with your data.
@@ -29,7 +30,15 @@ The entity, relation and transfer matrix weights are nessary to use our framewor
 ### Step 2: Train the entities rank weights.
 As we mention in the paper, for a entity in KG, it may has too many neighbours and we have to decide use which of them. We perform PageRank on the KG and the value for each entity(node) is used as weight as shown in [there](https://github.com/MatNLP/SMedBERT/blob/92141b7f4d2ec39cb56d28eebc3d13f84ebd9b56/run_pretraining_stream.py#L58-L60). You need to arrange it into the json foramt.
 ### Step 3: Prepare the entity2neighbours dict for quick search.
-As we often need to use the neighbours of a linked entity, we decide to build a dict beforehand to avoid unnecessary computing. We need two files, 'ent2outRel.pkl' and 'ent2inRel.pkl' respectively for out and in directions relations. The format should be 'ent_name' -> \[(rel_name,ent_name),...,(rel_name,ent_name)\].
+As we often need to use the neighbours of a linked entity, we decide to build a dict beforehand to avoid unnecessary computing. We need two files, 'ent2outRel.pkl' and 'ent2inRel.pkl' respectively for out and in directions relations. The format should be **ent_name -> \[(rel_name,ent_name), ..., (rel_name,ent_name)\]**.
+### Step 3: Prepare the entity2type dict.
+As we propose the hyper-attention that makes use of entity types knowledge, we need a dict to provide our model with such information. The format should be **ent_name -> type_val**,
+the **type_val** could be type name or type id.
+### Step 4: Prepare the name2id dict.
+As shown in [there](https://github.com/MatNLP/SMedBERT/blob/92141b7f4d2ec39cb56d28eebc3d13f84ebd9b56/run_pretraining_stream.py#L46-L69), name2id files are needed to provide the mapping bewteen entities and their corrponding resouces. The format is obvious as you see.
+## Step 5: Run Pre-training!!!
+python -m torch.distributed.launch --nproc_per_node=8 --nnodes=1 --node_rank=0 run_pretraining_stream.py
+Note that since the there are very large files need to be loaded into memory, the program may appear to freeze at first.
 
 
 ## Usage
