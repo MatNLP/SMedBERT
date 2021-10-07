@@ -37,7 +37,9 @@ the **type_val** could be type name or type id.
 ### Step 4: Prepare the name2id dict.
 As shown in [there](https://github.com/MatNLP/SMedBERT/blob/92141b7f4d2ec39cb56d28eebc3d13f84ebd9b56/run_pretraining_stream.py#L46-L69), name2id files are needed to provide the mapping bewteen entities and their corrponding resouces. The format is obvious as you see.
 ## Step 5: Run Pre-training!!!
+```
 python -m torch.distributed.launch --nproc_per_node=8 --nnodes=1 --node_rank=0 run_pretraining_stream.py
+```
 Note that since the there are very large files need to be loaded into memory, the program may appear to freeze at first.
 
 
