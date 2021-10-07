@@ -23,11 +23,11 @@ We release datasets with "open" licenses in the hub and for other datasets you m
 
 ## Use your own KG (New).
 ### KG format.
-Our framework only need to use entities( with their corresponding alias) and relations bewteen them in your KG. In fact, the alias are only used to linking the spans in the input sentence to the enities in KG, and so when a custom entit-linker is available for your KG, the alias are not nessary.
+Our framework only need to use entities( with their corresponding alias and types) and relations bewteen them in your KG. In fact, the alias are only used to linking the spans in the input sentence to the enities in KG, and so when a custom entit-linker is available for your KG, the alias are not nessary.
 ### Step 1: Train TransR embedding with your data.
 The entity, relation and transfer matrix weights are nessary to use our framework, as you see in https://github.com/MatNLP/SMedBERT/blob/15808263a03930eef173b485b5330abfc575509c/run_pretraining_stream.py#L81-L87. I recommend to use [DGL-KE](https://github.com/awslabs/dgl-ke) to train the embedding since it is fast and scale to very large KG. 
 ### Step 2: Train the entities rank weights.
-As we mention in the paper, 
+As we mention in the paper, for a entity in KG, it may has too many neighbours and we have to decide use which of them. We perform PageRank on the KG and the value for each entity(node) is used as weight as shown in https://github.com/MatNLP/SMedBERT/blob/92141b7f4d2ec39cb56d28eebc3d13f84ebd9b56/run_pretraining_stream.py#L58-L60.
 
 
 
