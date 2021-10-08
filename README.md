@@ -36,7 +36,7 @@ As we propose the hyper-attention that makes use of entity types knowledge, we n
 the **type_val** could be type name or type id.
 ### Step 4: Prepare the name2id dict.
 As shown in [there](https://github.com/MatNLP/SMedBERT/blob/92141b7f4d2ec39cb56d28eebc3d13f84ebd9b56/run_pretraining_stream.py#L46-L69), name2id files are needed to provide the mapping bewteen entities and their corrponding resouces. The format is obvious as you see.
-## Step 5: Run Pre-training!!!
+### Step 5: Run Pre-training!!!
 ```
 python -m torch.distributed.launch --nproc_per_node=4 run_pretraining_stream.py
 ```
