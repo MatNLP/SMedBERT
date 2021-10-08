@@ -22,7 +22,7 @@ Our code is almost ready for you. Due to the importance of commercial KG, we hav
 We release datasets with "open" licenses in the hub and for other datasets you may have to acquire them by your own.
 
 ## Use your own KG (New).
-Since the Authorization in DXY is very slow, and keeping people always waiting is embarrassing. I summarize the pre-training process as follow so you can use your own KG to play the model!
+Since the Authorization in DXY is very slow, and keeping people always waiting is embarrassing, I summarize the pre-training process as follow so you can use your own KG to play the model!
 ### KG format.
 Our framework only need to use entities( with their corresponding alias and types) and relations bewteen them in your KG. In fact, the alias are only used to linking the spans in the input sentence to the enities in KG, and so when a custom entit-linker is available for your KG, the alias are not nessary.
 ### Step 1: Train TransR embedding with your data.
