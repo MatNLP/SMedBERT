@@ -24,7 +24,7 @@ We release datasets with "open" licenses in the hub and for other datasets you m
 ## Use your own KG (New).
 Since the Authorization in DXY is very slow, and keeping people always waiting is embarrassing, I summarize the pre-training process as follow so you can use your own KG to play the model!
 ### KG format.
-Our framework only need to use entities( with their corresponding alias and types) and relations bewteen them in your KG. In fact, the alias are only used to linking the spans in the input sentence to the enities in KG, and so when a custom entit-linker is available for your KG, the alias are not nessary.
+Our framework only need to use entities( with their corresponding alias and types) and relations bewteen them in your KG. In fact, the alias are only used to linking the spans in the input sentence to the enities in KG, and so when a custom entit-linker is available for your KG, the alias are not necessary.
 ### Step 1: Train TransR embedding with your data.
 The entity, relation and transfer matrix weights are nessary to use our framework, as you see in [there](https://github.com/MatNLP/SMedBERT/blob/15808263a03930eef173b485b5330abfc575509c/run_pretraining_stream.py#L81-L87). I recommend to use [DGL-KE](https://github.com/awslabs/dgl-ke) to train the embedding since it is fast and scale to very large KG. 
 ### Step 2: Train the entities rank weights.
