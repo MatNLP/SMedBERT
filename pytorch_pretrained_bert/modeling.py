@@ -141,29 +141,6 @@ def swish(x):
 
 ACT2FN = {"gelu": gelu, "relu": F.relu, "swish": swish}
 
-class ClsHead(nn.Module):
-    def __init__(self, config, num_labels, dropout=0.3,need_rep=False):
-        super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        # self.pre_dense = nn.Linear(config.hidden_size, config.hidden_size)
-        # self.pre_dense_act = nn.Tanh()
-        self.layer_norm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-
-        self.decoder = nn.Linear(config.hidden_size, num_labels, bias=False)
-        self.bias = nn.Parameter(torch.zeros(num_labels), requires_grad=True)
-        self.dropout = nn.Dropout(p=dropout)
-        self.decoder.bias = self.bias
-        self.need_rep = need_rep
-
-    def forward(self, features, **kwargs):
-        # features = self.pre_dense(features)
-        # features = self.pre_dense_act(features)
-        x = self.dense(features)
-        x = gelu(x)
-        x = self.dropout(x)
-        v = self.layer_norm(x)
-        x = self.decoder(v)
-        return x,v if self.need_rep else x
 
 class BertConfig(object):
     """Configuration class to store the configuration of a `BertModel`.
@@ -436,9 +413,9 @@ class BertEncoder(nn.Module):
         # We do not use the last two layer.
         self.layer = nn.ModuleList([copy.deepcopy(layer) for _ in range(config.num_hidden_layers)])
         # self.mix_at = [10,11]
-        # self.mix_one_hop_after = 8 
+        self.mix_one_hop_after = 8
         self.mix_two_hop_after = 9
-        # self.one_hop_mixer = ZeroCandicateKnowBERTLayer(config.hidden_size,100) # Careful! There is a hardcode num(e_dim asserted to be 100).
+        self.one_hop_mixer = ZeroCandicateKnowBERTLayer(config.hidden_size,100) # Careful! There is a hardcode num(e_dim asserted to be 100).
         self.two_hop_mixer = InfusionLimitKnowBERTLayer(config.hidden_size,100)
 
     def forward(self, hidden_states, attention_mask,kc_entity_one_hop_ids,kc_entity_one_hop_types,
@@ -449,21 +426,48 @@ class BertEncoder(nn.Module):
 
         kc_one_hop_entity_hiddens = entity_embedding(kc_entity_one_hop_ids)
         kc_one_hop_type_hiddens = entity_type_embedding(kc_entity_one_hop_types)
-        
+
         kc_two_hop_entity_hiddens = entity_embedding(torch.where(kc_entity_two_hop_labels==-1,torch.zeros_like(kc_entity_two_hop_labels,device=kc_entity_two_hop_labels.device),kc_entity_two_hop_labels))
         kc_two_hop_type_hiddens = entity_type_embedding(kc_entity_two_hop_types)
 
         for index,layer_module in enumerate(self.layer): 
             hidden_states = layer_module(hidden_states, attention_mask)
-            # if(index == self.mix_one_hop_after):
-            #     hidden_states = self.one_hop_mixer(hidden_states, attention_mask, kc_entity_se_index,kc_entity_one_hop_ids,kc_one_hop_entity_hiddens,kc_one_hop_type_hiddens,kc_entity_infusion_pos)
-            if(index == self.mix_two_hop_after):
+            if(index == self.mix_one_hop_after):
+                hidden_states = self.one_hop_mixer(hidden_states, attention_mask, kc_entity_se_index,kc_entity_one_hop_ids,kc_one_hop_entity_hiddens,kc_one_hop_type_hiddens,kc_entity_infusion_pos)
+            elif(index == self.mix_two_hop_after):
                 hidden_states = self.two_hop_mixer(hidden_states,kc_entity_se_index,torch.where(kc_entity_two_hop_labels==-1,torch.zeros_like(kc_entity_two_hop_labels,device=kc_entity_two_hop_labels.device),kc_entity_two_hop_labels),
-                kc_entity_two_hop_types,
-                kc_two_hop_entity_hiddens,kc_entity_infusion_pos,kc_one_hop_entity_hiddens,kc_one_hop_type_hiddens)
+            #     kc_entity_two_hop_types,
+            #     kc_two_hop_entity_hiddens,kc_entity_infusion_pos)
                 
             if output_all_encoded_layers:
                 all_encoder_layers.append(hidden_states)
+
+        # 对实体进行二阶hop增强 (之后考虑dual attention: 二阶实体和二阶实体类型)
+        # BertLayerMix 这个模块没有在paper中提及，也是相当于做了一融合（不过定义的attention不一样）
+        # bert_encoder_layer_module_mix = self.layer[10]
+        # hidden_states, hidden_states_ent = bert_encoder_layer_module_mix(hidden_states,
+        #                                                                  attention_mask,
+        #                                                                  hidden_states_ent,
+        #                                                                  input_entity_type,
+        #                                                                  attention_mask_ent,
+        #                                                                  ent_mask,
+        #                                                                  token_condidate_entity,
+        #                                                                  attention_mask_two_hop_ent,
+        #                                                                  two_hop_entity_type)
+        # if output_all_encoded_layers: all_encoder_layers.append(hidden_states)
+        # BertEntLayer 是实体和上下文经过了paper中所提及的融合层
+        # bert_encoder_layer_module_norm = self.layer[11]
+        # hidden_states, hidden_states_ent = bert_encoder_layer_module_norm(hidden_states, attention_mask,
+        #                                                                        hidden_states_ent,
+        #                                                                        attention_mask_ent,
+        #                                                                        # two_hop_entity_type_mask, two_hop_entity_type_index_select,
+        #                                                                        ent_mask, token_condidate_entity,
+        #                                                                        attention_mask_two_hop_ent,
+        #                                                                        two_hop_entity_type)
+        # if output_all_encoded_layers: all_encoder_layers.append(hidden_states)
+        
+        # if not output_all_encoded_layers:
+        #     all_encoder_layers.append(hidden_states)
         return (all_encoder_layers,hidden_states)
 
 
@@ -471,7 +475,7 @@ class BertPooler(nn.Module):
     def __init__(self, config):
         super(BertPooler, self).__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        self.activation = nn.GELU()
+        self.activation = nn.Tanh()
 
     def forward(self, hidden_states):
         # We "pool" the model by simply taking the hidden state corresponding
@@ -1733,6 +1737,7 @@ class BertEntityAttention(nn.Module):
 
         return attention_output, attention_output_ent
 
+
 class AdditiveAttention(nn.Module):
     def __init__(self,q_dim,kv_dim):
         super().__init__()
@@ -1745,6 +1750,7 @@ class AdditiveAttention(nn.Module):
         k = self.k_proj(kv)
         intermediate = self.act(k+q)
         return self.v_proj(intermediate).squeeze(-1)
+
 
 class ZeroCandicateKnowBERTLayer(nn.Module):
     def __init__(self,h_dim,e_dim): # h_dim means BERT hidden status dim, which is 768 in BERT-base.
@@ -1759,7 +1765,6 @@ class ZeroCandicateKnowBERTLayer(nn.Module):
         self.layer_norm = BertLayerNorm(h_dim)
         self.eh_mixer = nn.Linear(2*h_dim,h_dim)
         self.update_gate = nn.Linear(2*h_dim,h_dim)
-        # self.out_layer_norm = BertLayerNorm(h_dim)
         assert(e_dim % head_num == 0)
     
     def forward(self, hidden_states, attention_mask, kc_entity_se_index,one_hop_entity_ids,
@@ -1796,9 +1801,7 @@ class ZeroCandicateKnowBERTLayer(nn.Module):
         gate_mask = torch.where(kc_entity_infusion_pos!=0,torch.ones_like(kc_entity_infusion_pos),torch.zeros_like(kc_entity_infusion_pos))
         e_hidden_states = gate_score * e_hidden_states * gate_mask
         final_hidden = self.act(self.eh_mixer(torch.cat((hidden_states,e_hidden_states),dim=-1)))
-        return  hidden_states + final_hidden
-
-
+        return  hidden_states  + final_hidden
 
 class InfusionLimitKnowBERTLayer(nn.Module):
     def __init__(self,h_dim,e_dim):
@@ -1808,11 +1811,10 @@ class InfusionLimitKnowBERTLayer(nn.Module):
         self.span_extractor = SelfAttentiveSpanExtractor(h_dim)
         
         self.bert2entity = nn.Linear(h_dim,e_dim)
-        self.entity22entity4 = nn.Linear(2*e_dim,4*e_dim)
+        self.entity2entity4 = nn.Linear(e_dim,4*e_dim)
         self.entity42entity = nn.Linear(4*e_dim,e_dim)
-        self.entity32entity = nn.Linear(3*e_dim,e_dim)
-        # self.entity_layer_norm = BertLayerNorm(e_dim)
-        # self.ffn_dropout = nn.Dropout(.1)
+        self.entity_layer_norm = BertLayerNorm(e_dim)
+        self.ffn_dropout = nn.Dropout(.1)
 
         self.ta_amp = nn.Linear(e_dim,e_dim*4) # 'ta' means type attention.
         self.ta_nar = nn.Linear(e_dim*4,e_dim)
@@ -1831,7 +1833,7 @@ class InfusionLimitKnowBERTLayer(nn.Module):
     def forward(self,hidden_states,kc_entity_se_index,
                 two_hop_entity_ids,
                 two_hop_entity_types,
-                two_hop_entity_hiddens,kc_entity_infusion_pos,kc_one_hop_entity_hiddens,kc_one_hop_type_hiddens):
+                two_hop_entity_hiddens,kc_entity_infusion_pos):
         # 方案三：将entity type信息加入到原始的attention中进行计算
         two_hop_one_hot = F.one_hot(two_hop_entity_types)
         
@@ -1854,9 +1856,7 @@ class InfusionLimitKnowBERTLayer(nn.Module):
 
         h_span_rep = self.span_extractor(hidden_states,kc_entity_se_index)
         h_span_rep = self.bert2entity(h_span_rep)
-        ke_h_span_rep = F.gelu(self.entity32entity(torch.cat((h_span_rep,kc_one_hop_entity_hiddens,kc_one_hop_type_hiddens),dim=-1)))
-        
-        h_span_rep = self.entity42entity(F.gelu(self.entity22entity4(torch.cat((ke_h_span_rep,h_span_rep),dim=-1)))) + h_span_rep
+        h_span_rep = self.entity_layer_norm(self.ffn_dropout(self.entity42entity(F.gelu(self.entity2entity4(h_span_rep))))+h_span_rep)
 
         # assert(one_hop_entity_hiddens.size() == (bathc_size,max_len,dim))
         assert(h_span_rep.size() == (batch_size,max_target,dim))
@@ -1874,7 +1874,7 @@ class InfusionLimitKnowBERTLayer(nn.Module):
         assert(two_hop_type_scores_for_each_entity.size() == (batch_size,max_target,two_hop_num))
         p2p_attention_rep = self.type_attention(h_span_rep.unsqueeze(-2),two_hop_entity_hiddens,two_hop_entity_hiddens,two_hop_type_scores_for_each_entity.unsqueeze(-2).unsqueeze(-2))
         
-        p2p_attention_rep = self.ta_layer_norm(p2p_attention_rep+(self.ta_nar(F.gelu(self.ta_amp(p2p_attention_rep)))))
+        p2p_attention_rep = self.ta_layer_norm(p2p_attention_rep+self.ffn_dropout(self.ta_nar(F.gelu(self.ta_amp(p2p_attention_rep)))))
 
         assert(p2p_attention_rep.size() == (batch_size,max_target,dim))
         p2p_attention_rep = torch.cat((p2p_attention_rep,h_span_rep),dim=-1)
@@ -1885,7 +1885,7 @@ class InfusionLimitKnowBERTLayer(nn.Module):
         sequence_p2p_attention_rep = torch.gather(pad_p2p_attention_rep,1,kc_entity_infusion_pos)
         sequence_p2p_attention_rep = self.infusion_back_project(sequence_p2p_attention_rep)
         sequence_p2p_attention_rep = self.layer_norm(sequence_p2p_attention_rep)
-        
+
         gate_score = self.update_gate(torch.cat((hidden_states,sequence_p2p_attention_rep),dim=-1))
         gate_score = F.tanh(gate_score)
         sequence_p2p_attention_rep = gate_score * sequence_p2p_attention_rep
@@ -2206,7 +2206,9 @@ class BertEntityPreTrainingHeads(nn.Module):
         # prediction_scores_ent = self.predictions_ent(sequence_output, candidate)
         # return prediction_scores, seq_relationship_score, prediction_scores_ent
 
-class cMeForPreTraining(BertPreTrainedModel):
+import random
+
+class ERNIEForPreTraining(BertPreTrainedModel):
     """BERT model with pre-training heads.
     This module comprises the BERT model followed by the two pre-training heads:
         - the masked language modeling head, and
@@ -2249,12 +2251,14 @@ class cMeForPreTraining(BertPreTrainedModel):
     config = BertConfig(vocab_size_or_config_json_file=32000, hidden_size=768,
         num_hidden_layers=12, num_attention_heads=12, intermediate_size=3072)
 
+    model = ERNIEForPreTraining(config)
+    masked_lm_logits_scores, seq_relationship_logits = model(input_ids, token_type_ids, input_mask)
     ```
     """
     def __init__(self, config, entity_embedding=None, entity_type_embedding=None,transfer_matrix=None,e_dim=None):
-        super(cMeForPreTraining, self).__init__(config)
+        super(ERNIEForPreTraining, self).__init__(config)
         self.bert = BertModel(config)
-        # self.cls = BertEntityPreTrainingHeads(config, self.bert.embeddings.word_embeddings.weight)
+        self.cls = BertEntityPreTrainingHeads(config, self.bert.embeddings.word_embeddings.weight)
         # torch.nn.init.xavier_uniform_(self.entity_embedding.weight)
         # torch.nn.init.xavier_uniform_(self.entity_embedding.weight) # In this way, loading weights bring no benfit
         self.e_dim = e_dim
@@ -2263,169 +2267,112 @@ class cMeForPreTraining(BertPreTrainedModel):
         self.entity_type_embedding = entity_type_embedding
         self.entity_embedding = entity_embedding
         entity_num , entity_dim =entity_embedding.weight.size()
-        self.pooler = nn.Linear(config.hidden_size,config.hidden_size)
-        self.cls = nn.Linear(config.hidden_size,2)
-        self.dropout = nn.Dropout(p=.15)
-        # self.transfer_matrix = transfer_matrix
-        # self.span_extractor = SelfAttentiveSpanExtractor(config.hidden_size)
-        # self.entity_classifer = entity_embedding.weight
-        # self.act = nn.GELU()
-        # self.FFN1 = nn.Linear(e_dim,e_dim*4)
-        # self.FFN2 = nn.Linear(e_dim*4,e_dim)
-        # self.neg_sample_num = 24
-        # self.entity_num = entity_num
+        self.transfer_matrix = transfer_matrix
+        self.span_extractor = SelfAttentiveSpanExtractor(config.hidden_size)
+        self.entity_classifer = entity_embedding.weight
+        self.act = nn.GELU()
+        self.FFN1 = nn.Linear(e_dim,e_dim*4)
+        self.FFN2 = nn.Linear(e_dim*4,e_dim)
+        self.neg_sample_num = 35
+        self.entity_num = entity_num
         # self.loss_fn = nn.CrossEntropyLoss(ignore_index=-1)
-        # assert(self.entity_classifer.size() == (entity_num,entity_dim))
+        assert(self.entity_classifer.size() == (entity_num,entity_dim))
 
-    def forward(self, input_ids, segment_ids, input_mask, kc_entity_one_hop_ids,
-                kc_entity_one_hop_types, # two_hop_entity_ids, two_hop_entity_types,
-                kc_entity_se_index, kc_entity_two_hop_labels, kc_entity_out_or_in, kc_entity_two_hop_rel_types,kc_entity_two_hop_types,kc_entity_infusion_pos,labels):
 
-        sequence_output, pooled_output = self.bert(input_ids, segment_ids, input_mask, kc_entity_one_hop_ids,
-                                                   kc_entity_one_hop_types,kc_entity_two_hop_labels,kc_entity_two_hop_types,kc_entity_infusion_pos,kc_entity_se_index,
+
+    # def parameter_complete(self, one_hop_entity_ids, one_hop_entity_types, two_hop_entity_ids):
+    #     one_hop_input_ent = self.entity_embedding(one_hop_entity_ids+1)
+    #     one_hop_input_entity_type = self.entity_type_embedding(one_hop_entity_types)
+    #     one_hop_ent_mask = one_hop_entity_ids.ne_(-1)
+    #     two_hop_input_ent = self.entity_embedding(two_hop_entity_ids+1)
+    #     two_hop_ent_mask = two_hop_entity_ids.ne_(-1)
+    #     return one_hop_input_ent, one_hop_input_entity_type, one_hop_ent_mask, two_hop_input_ent, two_hop_ent_mask
+    def forward(self, input_ids, segment_ids, input_mask, masked_lm_labels,next_sentence_label,
+        kc_entity_se_index_insert ,
+        kc_entity_two_hop_labels_insert,
+        kc_entity_out_or_in_insert ,
+        kc_entity_two_hop_rel_types_insert, 
+        kc_entity_infusion_pos_insert ,
+        kc_entity_two_hop_types_insert ,
+        kc_entity_one_hop_ids_insert ,
+        kc_entity_one_hop_types_insert,
+        kc_entity_se_index_pred,
+        kc_entity_two_hop_labels_pred,
+        kc_entity_out_or_in_pred,
+        kc_entity_two_hop_rel_types_pred):
+
+        sequence_output, pooled_output = self.bert(input_ids, segment_ids, input_mask, kc_entity_one_hop_ids_insert,
+                                                   kc_entity_one_hop_types_insert,kc_entity_two_hop_labels_insert,
+                                                   kc_entity_two_hop_types_insert,kc_entity_infusion_pos_insert,kc_entity_se_index_insert,
                                                    self.entity_embedding,self.entity_type_embedding,output_all_encoded_layers=False)
-        pooled_output = self.pooler(pooled_output)
-        pooled_output = F.gelu(pooled_output)
-        pooled_output = self.dropout(pooled_output)
-        logits = self.cls(pooled_output).view(-1,2)
-        loss = F.cross_entropy(logits,labels.view(-1))
-        return loss,logits
-
-class cMeForSoftMaxNER(BertPreTrainedModel):
-    """BERT model with pre-training heads.
-    This module comprises the BERT model followed by the two pre-training heads:
-        - the masked language modeling head, and
-        - the next sentence classification head, and
-        - the entity predict head.
-    Params:
-        config: a BertConfig class instance with the configuration to build a new model.
-    Inputs:
-        `input_ids`: a torch.LongTensor of shape [batch_size, sequence_length]
-            with the word token indices in the vocabulary(see the tokens preprocessing logic in the scripts
-            `extract_features.py`, `run_classifier.py` and `run_squad.py`)
-        `token_type_ids`: an optional torch.LongTensor of shape [batch_size, sequence_length] with the token
-            types indices selected in [0, 1]. Type 0 corresponds to a `sentence A` and type 1 corresponds to
-            a `sentence B` token (see BERT paper for more details).
-        `attention_mask`: an optional torch.LongTensor of shape [batch_size, sequence_length] with indices
-            selected in [0, 1]. It's a mask to be used if the input sequence length is smaller than the max
-            input sequence length in the current batch. It's the mask that we typically use for attention when
-            a batch has varying length sentences.
-        `masked_lm_labels`: masked language modeling labels: torch.LongTensor of shape [batch_size, sequence_length]
-            with indices selected in [-1, 0, ..., vocab_size]. All labels set to -1 are ignored (masked), the loss
-            is only computed for the labels set in [0, ..., vocab_size]
-        `next_sentence_label`: next sentence classification loss: torch.LongTensor of shape [batch_size]
-            with indices selected in [0, 1].
-            0 => next sentence is the continuation, 1 => next sentence is a random sentence.
-    Outputs:
-        if `masked_lm_labels` and `next_sentence_label` are not `None`:
-            Outputs the total_loss which is the sum of the masked language modeling loss and the next
-            sentence classification loss.
-        if `masked_lm_labels` or `next_sentence_label` is `None`:
-            Outputs a tuple comprising
-            - the masked language modeling logits of shape [batch_size, sequence_length, vocab_size], and
-            - the next sentence classification logits of shape [batch_size, 2].
-    Example usage:
-    ```python
-    # Already been converted into WordPiece token ids
-    input_ids = torch.LongTensor([[31, 51, 99], [15, 5, 0]])
-    input_mask = torch.LongTensor([[1, 1, 1], [1, 1, 0]])
-    token_type_ids = torch.LongTensor([[0, 0, 1], [0, 1, 0]])
-
-    config = BertConfig(vocab_size_or_config_json_file=32000, hidden_size=768,
-        num_hidden_layers=12, num_attention_heads=12, intermediate_size=3072)
-
-    ```
-    """
-    def __init__(self, config, entity_embedding=None, entity_type_embedding=None,transfer_matrix=None,e_dim=None,labels_num=None):
-        super(cMeForSoftMaxNER, self).__init__(config)
-        self.bert = BertModel(config)
+        # prediction_scores: batch * max_len * vocub_size 表示每个token位置对应的词表中每个词的概率
+        # seq_relationship_score： batch * 2 表示batch中两个句子之间的关系
+        # prediction_scores_ent: batch * max_len * entity_size 表示这个sample与这个sample召回的每个实体之间的关系分数
+        prediction_scores, seq_relationship_score = self.cls(sequence_output, pooled_output)
         
-        self.e_dim = e_dim
-        self.bert2entity = nn.Linear(config.hidden_size,e_dim)
-        self.apply(self.init_bert_weights)
-        self.entity_type_embedding = entity_type_embedding
-        self.entity_embedding = entity_embedding
-        # entity_num , entity_dim =entity_embedding.weight.size()
-        self.cls = ClsHead(config,labels_num)
-        # self.ffn = nn.Linear(config.hidden_size, config.hidden_size)
-        self.labels_num = labels_num
-        self.dropout = nn.Dropout(p=.1)
-        
+        kc_entity_se_index, kc_entity_out_or_in, kc_entity_two_hop_labels, kc_entity_two_hop_rel_types = kc_entity_se_index_pred, \
+        kc_entity_two_hop_labels_pred, \
+        kc_entity_out_or_in_pred, \
+        kc_entity_two_hop_rel_types_pred
 
-    def forward(self, input_ids, segment_ids, input_mask, kc_entity_one_hop_ids,
-                kc_entity_one_hop_types,
-                kc_entity_se_index, kc_entity_two_hop_labels, kc_entity_out_or_in, kc_entity_two_hop_rel_types,kc_entity_two_hop_types,kc_entity_infusion_pos,labels):
+        if masked_lm_labels is not None and next_sentence_label is not None:
+            loss_fct = CrossEntropyLoss(ignore_index=-1)
+            masked_lm_loss = loss_fct(prediction_scores.reshape(-1, self.config.vocab_size), masked_lm_labels.reshape(-1))
+            next_sentence_loss = loss_fct(seq_relationship_score.view(-1, 2), next_sentence_label.view(-1))
+            
+            batch_size, max_target, two_hop_num =kc_entity_out_or_in.size()
+            assert(max_target == MAX_TARGET)
+            assert(kc_entity_se_index.size() == (batch_size,max_target,2))
+            assert(kc_entity_out_or_in.size() == (batch_size,max_target,two_hop_num))
+            assert(kc_entity_two_hop_labels.size() == (batch_size,max_target,two_hop_num))
+            assert(kc_entity_two_hop_rel_types.size() == (batch_size,max_target,two_hop_num))
 
-        sequence_output, pooled_output = self.bert(input_ids, segment_ids, input_mask, kc_entity_one_hop_ids,
-                                                   kc_entity_one_hop_types,kc_entity_two_hop_labels,kc_entity_two_hop_types,kc_entity_infusion_pos,kc_entity_se_index,
-                                                   self.entity_embedding,self.entity_type_embedding,output_all_encoded_layers=False)
+            span_rep = self.span_extractor(sequence_output,kc_entity_se_index)
+            span_rep = self.bert2entity(span_rep)
+            span_rep = F.gelu(span_rep)
+            span_rep = self.FFN2(self.act(self.FFN1(span_rep)))
 
-        x,v = self.cls(sequence_output)
-        logits = v.view(-1,self.labels_num)
-        loss = F.cross_entropy(logits,labels.view(-1),ignore_index=-1)
-        return loss,logits
-
-
-
-class cMeForRE(BertPreTrainedModel):
-    def __init__(self, config, entity_embedding=None, entity_type_embedding=None,transfer_matrix=None,e_dim=None,label_num = None):
-        super(cMeForRE, self).__init__(config)
-        self.bert = BertModel(config)
-        # self.cls = BertEntityPreTrainingHeads(config, self.bert.embeddings.word_embeddings.weight)
-        # torch.nn.init.xavier_uniform_(self.entity_embedding.weight)
-        # torch.nn.init.xavier_uniform_(self.entity_embedding.weight) # In this way, loading weights bring no benfit
-        self.e_dim = e_dim
-        self.bert2entity = nn.Linear(config.hidden_size,e_dim)
-        self.apply(self.init_bert_weights)
-        self.entity_type_embedding = entity_type_embedding
-        self.entity_embedding = entity_embedding
-        entity_num , entity_dim =entity_embedding.weight.size()
-        # self.pooler = nn.Linear(config.hidden_size,config.hidden_size)
-        self.cls = ClsHead(config,label_num)
-        self.dropout = nn.Dropout(p=.05)
-        self.label_num = label_num
-
-    def forward(self, input_ids, segment_ids, input_mask, kc_entity_one_hop_ids,
-                kc_entity_one_hop_types, # two_hop_entity_ids, two_hop_entity_types,
-                kc_entity_se_index, kc_entity_two_hop_labels, kc_entity_out_or_in, kc_entity_two_hop_rel_types,kc_entity_two_hop_types,kc_entity_infusion_pos,labels):
-
-        sequence_output, pooled_output = self.bert(input_ids, segment_ids, input_mask, kc_entity_one_hop_ids,
-                                                   kc_entity_one_hop_types,kc_entity_two_hop_labels,
-                                                   kc_entity_two_hop_types,kc_entity_infusion_pos,kc_entity_se_index,
-                                                   self.entity_embedding,self.entity_type_embedding,output_all_encoded_layers=False)
-        pooled_output = self.dropout(pooled_output)
-        # logits = self.cls(pooled_output).view(-1,self.label_num)
-        x,v = self.cls(pooled_output)
-        # print(x.size(),v.size())
-        logits = v.view(-1,self.label_num)
-        # print(labels.view(-1).size(),logits.size())
-        loss = F.cross_entropy(logits,labels.view(-1))
-        return loss,logits
-
-class cMeForIR(BertPreTrainedModel):
-    def __init__(self, config, entity_embedding=None, entity_type_embedding=None,transfer_matrix=None,e_dim=None,label_num = None):
-        super(cMeForIR, self).__init__(config)
-        self.bert = BertModel(config)
-        self.e_dim = e_dim
-        self.bert2entity = nn.Linear(config.hidden_size,e_dim)
-        self.apply(self.init_bert_weights)
-        self.entity_type_embedding = entity_type_embedding
-        self.entity_embedding = entity_embedding
-        entity_num , entity_dim =entity_embedding.weight.size()
-        self.cls = nn.Linear(config.hidden_size,1)
-        self.dropout = nn.Dropout(p=.1)
-        # self.label_num = label_num
-
-    def forward(self, input_ids, segment_ids, input_mask, kc_entity_one_hop_ids,
-                kc_entity_one_hop_types, # two_hop_entity_ids, two_hop_entity_types,
-                kc_entity_se_index, kc_entity_two_hop_labels, kc_entity_out_or_in, kc_entity_two_hop_rel_types,kc_entity_two_hop_types,kc_entity_infusion_pos,labels):
-
-        sequence_output, pooled_output = self.bert(input_ids, segment_ids, input_mask, kc_entity_one_hop_ids,
-                                                   kc_entity_one_hop_types,kc_entity_two_hop_labels,kc_entity_two_hop_types,kc_entity_infusion_pos,kc_entity_se_index,
-                                                   self.entity_embedding,self.entity_type_embedding,output_all_encoded_layers=False)
-        pooled_output = self.dropout(pooled_output)
-        logits = F.sigmoid(self.cls(pooled_output))
-        return (logits,)
+            assert(span_rep.size() == (batch_size,max_target,self.e_dim))
+            dir_span_rep = torch.cat((span_rep.unsqueeze(-2).expand(-1,-1,two_hop_num,-1),kc_entity_out_or_in.unsqueeze(-1)),dim=-1)
+            assert(dir_span_rep.size() == (batch_size,max_target,two_hop_num,self.e_dim+1))
+            proj_matrix = self.transfer_matrix(kc_entity_two_hop_rel_types)
+            proj_matrix = proj_matrix.view(batch_size*two_hop_num*max_target,self.e_dim+1,self.e_dim+1)
+            dir_span_rep = dir_span_rep.view(batch_size*two_hop_num*max_target,1,self.e_dim+1)
+            fin_span_rep = torch.bmm(dir_span_rep,proj_matrix).squeeze(-2)
+            assert(fin_span_rep.size() == (batch_size*two_hop_num*max_target, self.e_dim+1))
+            # print(torch.norm(fin_span_rep,p=None,dim=-1).size())
+            # print(fin_span_rep.size())
+            norm = torch.norm(fin_span_rep,p=None,dim=-1,keepdim=True)
+            de_nomer = (torch.where(norm!=0,norm,torch.ones_like(norm)))
+            fin_span_rep = fin_span_rep/ de_nomer
+            # print(self.entity_classifer.size())
+            # print(torch.norm(self.entity_classifer,p=None,dim=-1).size())
+            # assert(False)
+            zeros = torch.zeros_like(kc_entity_two_hop_labels,device=kc_entity_two_hop_labels.device)
+            batch_size, max_target, two_hop_num = kc_entity_two_hop_labels.size()
+            kc_entity_two_hop_ids = torch.where(kc_entity_two_hop_labels!=-1,kc_entity_two_hop_labels,zeros)
+            neg_samples_ids = torch.randint(0,self.entity_num,(batch_size,max_target,two_hop_num,self.neg_sample_num),device=kc_entity_two_hop_ids.device)
+            target_ids = torch.cat((kc_entity_two_hop_ids.unsqueeze(-1),neg_samples_ids),dim=-1)
+            target_tables = self.entity_embedding(target_ids)
+            assert(target_tables.size() == (batch_size,max_target,two_hop_num,1+self.neg_sample_num,self.e_dim))
+            norm = torch.norm(target_tables,p=None,dim=-1,keepdim=True)
+            de_nomer = (torch.where(norm!=0,norm,torch.ones_like(norm)))
+            classifer = target_tables / de_nomer
+            classifer = classifer.view(-1, self.neg_sample_num + 1,self.e_dim)
+            # check_has_nan(fin_span_rep)
+            # check_has_nan(classifer)
+            # assert(torch.sum(torch.isnan())==0)
+            fin_span_rep = fin_span_rep.unsqueeze(-2)
+            entity_logist = torch.bmm(fin_span_rep[:,:,:-1],classifer.transpose(-2,-1)).squeeze(-2)
+            assert(entity_logist.size() == (batch_size*max_target*two_hop_num,1+self.neg_sample_num))
+            
+            entity_loss = loss_fct(entity_logist,torch.where(kc_entity_two_hop_labels==-1,kc_entity_two_hop_labels,zeros).view(-1) )
+            if(random.random() < .005):
+                print(masked_lm_loss.item(),next_sentence_loss.item(),entity_loss.item())
+            total_loss = masked_lm_loss + next_sentence_loss + entity_loss
+            return total_loss
+        else:
+            return prediction_scores, seq_relationship_score
 
 
 ###### /* End of Insertion */
