@@ -77,7 +77,7 @@ mask_count = dict.fromkeys(entity_dict.keys(), MAX_PRE_ENTITY_MASK)
 for key in entity_dict.keys():
     if (len(key) > 1 and not key.isdigit()):
         ww_tree.insert(key)
-ebmedding.
+# ebmedding.
 
 entity_dict_index2str = {value: key for key, value in entity_dict.items()}
 
@@ -1027,4 +1027,5 @@ if __name__ == "__main__":
     #     pickle.dump(entity_hit_stat,bf)
     # with open('word_stat.pkl','wb+') as bf:
     #     pickle.dump(word_stat,bf)
+    
     
